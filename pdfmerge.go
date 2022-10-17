@@ -8,7 +8,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"time"
+
+	"github.com/signintech/gopdf"
+	rpdf "rsc.io/pdf"
 )
 
 type Response []struct {
@@ -20,7 +23,8 @@ type Response []struct {
 }
 
 func main() {
-	resp, err := http.Get("http://localhost:3000/api/pdfs")
+	//resp, err := http.Get("http://localhost:3000/api/pdfs")
+	resp, err := http.Get("http://localhost:3001/pdfs")
 
 	if err != nil {
 		log.Fatal(err)
@@ -40,20 +44,30 @@ func main() {
 	if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to the go struct pointer
 		fmt.Println("Can not unmarshal JSON")
 	}
-	var counter int
-	//pdf := gopdf.GoPdf{}
-	counter = 0
-	for i := 0; i < 50; i++ {
-		for _, rec := range result {
-			dec, err := base64.StdEncoding.DecodeString(rec.Pdf)
+	//var counter int
+	pdf := gopdf.GoPdf{}
+
+	pdf.Start(gopdf.Config{
+		PageSize: *gopdf.PageSizeA4,
+	})
+
+	t1 := time.Now()
+
+	for i := 0; i < 3; i++ {
+		for x := 0; x < len(result); x++ {
+			//archivo := "myfilename" + strconv.Itoa(x) + ".pdf"
+			archivo := "myfilename.pdf"
+
+			//fmt.Println(result[x].Title)
+			dec, err := base64.StdEncoding.DecodeString(result[x].Pdf)
 			if err != nil {
 				panic(err)
 			}
-			f, err := os.Create("myfilename" + strconv.Itoa(counter) + ".pdf")
+			f, err := os.Create(archivo)
 			if err != nil {
 				panic(err)
 			}
-			defer f.Close()
+			//defer f.Close()
 
 			if _, err := f.Write(dec); err != nil {
 				panic(err)
@@ -61,28 +75,37 @@ func main() {
 			if err := f.Sync(); err != nil {
 				panic(err)
 			}
-			output, err := os.OpenFile("output.pdf", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+			defer f.Close()
+
+			fi, err := rpdf.Open(archivo)
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
-			for i := 0; i < 2; i++ {
-				pdfComoBytes, err := ioutil.ReadFile("myfilename" + strconv.Itoa(i) + ".pdf")
-				if err != nil {
-					panic(err)
-				}
-				if _, err := output.Write([]byte(pdfComoBytes)); err != nil {
-					log.Fatal(err)
-				}
-				if err := output.Close(); err != nil {
-					log.Fatal(err)
-				}
+
+			pageNum := fi.NumPage()
+			fi = nil
+			f = nil
+
+			for p := 1; p <= pageNum; p++ {
+				pdf.AddPage()
+
+				//bgpdf := gofpdi.ImportPage(pdf, filer, p, "/MediaBox")
+				tpl1 := pdf.ImportPage(archivo, p, "/MediaBox")
+				pdf.UseImportedTemplate(tpl1, 50, 100, 400, 0)
+
+				//gofpdi.UseImportedTemplate(pdf, bgpdf, 0, 0, 210*MM_TO_RMPOINTS, 297
 
 			}
 
-			//fmt.Println(pdfComoBytes)
-			counter++
 		}
+		pdf.WritePdf("example.pdf")
 
 	}
+
+	t2 := time.Now()
+
+	diff := t2.Sub(t1)
+	fmt.Println(diff)
 
 }
